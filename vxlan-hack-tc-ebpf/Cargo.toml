@@ -1,0 +1,20 @@
+[package]
+name = "vxlan-tc-hack-ebpf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vxlan-hack-common = { path = "../vxlan-hack-common" }
+
+aya-ebpf = { workspace = true }
+aya-log-ebpf = { workspace = true }
+network-types = "0.0.7"
+memoffset = "0.9.1"
+
+[build-dependencies]
+which = { workspace = true }
+xtask = { path = "../xtask" }
+
+[[bin]]
+name = "vxlan-hack-tc-ebpf"
+path = "src/main.rs"
