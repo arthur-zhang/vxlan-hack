@@ -27,6 +27,6 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
-[profile.release.package.vxlan-hack-ebpf]
+[profile.release.package.vxlan-tc-hack-ebpf]
 debug = 2
 codegen-units = 1

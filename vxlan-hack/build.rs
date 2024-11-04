@@ -49,7 +49,7 @@ fn main() {
     let Metadata { packages, .. } = MetadataCommand::new().no_deps().exec().unwrap();
     let ebpf_package = packages
         .into_iter()
-        .find(|Package { name, .. }| name == "vxlan-hack-ebpf")
+        .find(|Package { name, .. }| name == "vxlan-hack-tc-ebpf")
         .unwrap();
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
@@ -100,7 +100,7 @@ fn main() {
         cmd.current_dir(ebpf_dir);
 
         // Workaround for https://github.com/rust-lang/cargo/issues/6412 where cargo flocks itself.
-        let ebpf_target_dir = out_dir.join("vxlan-hack-ebpf");
+        let ebpf_target_dir = out_dir.join("vxlan-hack-tc-ebpf");
         cmd.arg("--target-dir").arg(&ebpf_target_dir);
 
         let mut child = cmd

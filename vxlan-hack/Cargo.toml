@@ -29,7 +29,7 @@ cargo_metadata = { workspace = true }
 # Finally note that *any* usage of `artifact = ...` in *any* Cargo.toml in the workspace breaks
 # workflows with stable cargo; stable cargo outright refuses to load manifests that use unstable
 # features.
-vxlan-hack-ebpf = { path = "../vxlan-hack-ebpf" }
+vxlan-hack-tc-ebpf = { path = "../vxlan-hack-tc-ebpf" }
 xtask = { path = "../xtask" }
 
 [[bin]]

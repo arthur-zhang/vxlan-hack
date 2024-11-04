@@ -1,5 +1,5 @@
 [package]
-name = "vxlan-tc-hack-ebpf"
+name = "vxlan-hack-tc-ebpf"
 version = "0.1.0"
 edition = "2021"
 

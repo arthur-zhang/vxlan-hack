@@ -66,68 +66,34 @@ fn get_vxlan_flag(ctx: &TcContext) -> Result<u8, ()> {
 }
 
 
-fn try_tc_egress(ctx: TcContext) -> Result<(), ()> {
+fn try_tc_egress(mut ctx: TcContext) -> Result<(), ()> {
     let first_byte: u8 = get_vxlan_flag(&ctx)?;
-
-    info!(&ctx, "try_tc_egress >>> VXLAN packet, first_byte: {}", first_byte);
-
     if first_byte != REAL_VXLAN_FLAG_BYTE {
         return Ok(());
     }
-    let target_val = FAKE_VXLAN_FLAG_BYTE;
-    let ret = unsafe {
-        aya_ebpf::helpers::bpf_skb_store_bytes(
-            ctx.skb.skb as *mut _,
-            PAYLOAD_OFFSET as u32,
-            &target_val as *const _ as *const _,
-            1,
-            BPF_F_RECOMPUTE_CSUM as u64,
-        )
-    };
-    if ret != 0 {
+    if let Err(err) = ctx.store(PAYLOAD_OFFSET, &FAKE_VXLAN_FLAG_BYTE, 0u64) {
         info!(&ctx, "try_tc_egress bpf_skb_store_bytes failed");
+        return Err(());
     }
-
-    let ret = unsafe {
-        bpf_l4_csum_replace(ctx.skb.skb, UDP_CSUM_OFF, REAL_VXLAN_FLAG_BYTE as u64, FAKE_VXLAN_FLAG_BYTE as u64, 2)
-    };
-    if ret != 0 {
-        info!(&ctx, "try_tc_egress bpf_l4_csum_replace failed");
-    }
-
     Ok(())
 }
 
 fn try_tc_ingress(mut ctx: TcContext) -> Result<(), ()> {
     let first_byte: u8 = get_vxlan_flag(&ctx)?;
 
-    info!(&ctx, "try_tc_ingress >>> VXLAN packet, first_byte: {}", first_byte);
-
     if first_byte != FAKE_VXLAN_FLAG_BYTE {
         return Ok(());
     }
 
-    let target_val = REAL_VXLAN_FLAG_BYTE;
-
-    let ret = unsafe {
-        aya_ebpf::helpers::bpf_skb_store_bytes(
-            ctx.skb.skb as *mut _,
-            PAYLOAD_OFFSET as u32,
-            &target_val as *const _ as *const _,
-            1,
-            0,
-        )
-    };
-    if ret != 0 {
-        info!(&ctx, "try_tc_ingress bpf_skb_store_bytes failed");
+    if let Err(err) = ctx.store(PAYLOAD_OFFSET, &REAL_VXLAN_FLAG_BYTE, 0u64) {
+        info!(&ctx, "try_tc_ingress store failed");
         return Err(());
     }
-    info!(&ctx, "try_tc_ingress bpf_skb_store_bytes success");
-    let ret = unsafe {
-        bpf_l4_csum_replace(ctx.skb.skb, UDP_CSUM_OFF, FAKE_VXLAN_FLAG_BYTE as u64, REAL_VXLAN_FLAG_BYTE as u64, 2)
-    };
-    if ret != 0 {
+
+    if let Err(err) = ctx.l4_csum_replace(UDP_CSUM_OFF as usize, FAKE_VXLAN_FLAG_BYTE as u64,
+                                          REAL_VXLAN_FLAG_BYTE as u64, 2) {
         info!(&ctx, "try_tc_ingress bpf_l4_csum_replace failed");
+        return Err(());
     }
 
     Ok(())
