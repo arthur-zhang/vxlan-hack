@@ -40,11 +40,7 @@ use xtask::AYA_BUILD_EBPF;
 fn main() {
     println!("cargo:rerun-if-env-changed={}", AYA_BUILD_EBPF);
 
-    let build_ebpf = env::var(AYA_BUILD_EBPF)
-        .as_deref()
-        .map(str::parse)
-        .map(Result::unwrap)
-        .unwrap_or_default();
+    let build_ebpf = true;
 
     let Metadata { packages, .. } = MetadataCommand::new().no_deps().exec().unwrap();
     let ebpf_package = packages

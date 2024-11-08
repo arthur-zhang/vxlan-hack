@@ -15,6 +15,7 @@ struct Opt {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
     let opt = Opt::parse();
 
     env_logger::init();
@@ -30,18 +31,24 @@ async fn main() -> anyhow::Result<()> {
         debug!("remove limit on locked memory failed, ret is: {}", ret);
     }
 
-    let bpf_dir = std::env::var("BPF_DIR").unwrap_or("/tmp".to_string());
+    println!("loading eBPF program {}", concat!(env!("OUT_DIR"), "/vxlan-hack-tc-ebpf" ));
+
+    let mut ebpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
+        env!("OUT_DIR"),
+        "/vxlan-hack"
+    )))?;
+
+
     let Opt { iface } = opt;
-
-    let bpf_path = format!("{}/{}", bpf_dir, "vxlan-hack-tc-ebpf");
-    println!("Loading eBPF program... {}", bpf_path);
-    let bpf_data = std::fs::read(bpf_path).unwrap();;
-
-    let mut ebpf = aya::Ebpf::load(&bpf_data[..])?;
 
     if let Err(e) = BpfLogger::init(&mut ebpf) {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
+    }
+    let detach_egress = tc::qdisc_detach_program(&iface, TcAttachType::Egress, "tc_egress");
+    let detach_ingress = tc::qdisc_detach_program(&iface, TcAttachType::Ingress, "tc_ingress");
+    if detach_egress.is_err() || detach_ingress.is_err() {
+        info!("failed to detach existing programs, egress error {:?}, {:?}", detach_egress, detach_ingress);
     }
     let _ = tc::qdisc_add_clsact(&iface);
     let program: &mut SchedClassifier =
@@ -59,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
     let ctrl_c = signal::ctrl_c();
     println!("Waiting for Ctrl-C...");
     ctrl_c.await?;
-    println!("Exiting...{:?}", ebpf);
+    println!("Exiting...");
 
     Ok(())
 }

@@ -16,5 +16,5 @@ which = { workspace = true }
 xtask = { path = "../xtask" }
 
 [[bin]]
-name = "vxlan-hack-tc-ebpf"
+name = "vxlan-hack"
 path = "src/main.rs"
