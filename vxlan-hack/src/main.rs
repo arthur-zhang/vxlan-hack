@@ -1,3 +1,4 @@
+use std::io::Error;
 use anyhow::Context as _;
 use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpFlags};
 use aya_log::BpfLogger;
@@ -6,6 +7,7 @@ use clap::Parser;
 use log::{debug, warn};
 use log::info;
 use tokio::signal;
+use tokio::signal::unix::SignalKind;
 
 #[derive(Debug, Parser)]
 struct Opt {
@@ -31,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         debug!("remove limit on locked memory failed, ret is: {}", ret);
     }
 
-    println!("loading eBPF program {}", concat!(env!("OUT_DIR"), "/vxlan-hack-tc-ebpf" ));
+    info!("loading eBPF program {}", concat!(env!("OUT_DIR"), "/vxlan-hack-tc-ebpf" ));
 
     let mut ebpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
         env!("OUT_DIR"),
@@ -45,11 +47,7 @@ async fn main() -> anyhow::Result<()> {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
-    let detach_egress = tc::qdisc_detach_program(&iface, TcAttachType::Egress, "tc_egress");
-    let detach_ingress = tc::qdisc_detach_program(&iface, TcAttachType::Ingress, "tc_ingress");
-    if detach_egress.is_err() || detach_ingress.is_err() {
-        info!("failed to detach existing programs, egress error {:?}, {:?}", detach_egress, detach_ingress);
-    }
+    detach(&iface);
     let _ = tc::qdisc_add_clsact(&iface);
     let program: &mut SchedClassifier =
         ebpf.program_mut("tc_egress").unwrap().try_into()?;
@@ -63,10 +61,39 @@ async fn main() -> anyhow::Result<()> {
     ingress_program.attach(&iface, TcAttachType::Ingress)?;
 
 
-    let ctrl_c = signal::ctrl_c();
-    println!("Waiting for Ctrl-C...");
-    ctrl_c.await?;
-    println!("Exiting...");
+    let mut sig_term = signal::unix::signal(SignalKind::terminate())?;
+    let mut sig_int = signal::unix::signal(SignalKind::interrupt())?;
 
+    println!("Waiting for signal to quit...");
+    tokio::select! {
+        _ = sig_term.recv() => {
+            println!("Received SIGTERM, exiting...");
+        }
+        _ = sig_int.recv() => {
+            println!("Received SIGINT, exiting...");
+        }
+    }
+    info!("start detaching bpf from {}", iface);
+    detach(&iface);
+    info!("Exiting...");
     Ok(())
+}
+
+fn detach(iface: &str) {
+    match tc::qdisc_detach_program(&iface, TcAttachType::Egress, "tc_egress") {
+        Ok(_) => {
+            info!("detached tc_egress success");
+        }
+        Err(err) => {
+            info!("failed to detach tc_egress {:?}", err);
+        }
+    }
+    match tc::qdisc_detach_program(&iface, TcAttachType::Ingress, "tc_ingress") {
+        Ok(_) => {
+            info!("detached tc_ingress success");
+        }
+        Err(err) => {
+            info!("failed to detach tc_ingress {:?}", err);
+        }
+    };
 }
